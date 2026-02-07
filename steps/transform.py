@@ -8,6 +8,7 @@ from datetime import datetime
 
 from zenml import step
 from src.domain.documents import TelegramChatDocument, ThreadTracker
+from src.domain.schemas import GOLD_THREAD_SCHEMA
 from .validate import validate_messages
 # --- Worker Functions (Must be static/top-level for pickling) ---
 
@@ -117,46 +118,7 @@ def aggregate_users(df: DataFrame) -> DataFrame:
 
 @step
 def reconstruct_threads(df: DataFrame) -> DataFrame:
-    # Define Schemas (Reaction, Nested, Gold Thread) here as per your original code
-    # 1. Define Reaction Schema explicitly (Fixes the Int/String crash)
-    REACTION_SCHEMA = StructType([
-            StructField("emoji", StringType(), True),
-            StructField("count", LongType(), True)  # Now properly supports Integers
-        ])
-
-    # 2. Nested Message Schema uses the Reaction Schema
-    NESTED_MESSAGE_SCHEMA = StructType([
-            StructField("id", StringType(), True),
-            StructField("message_id", LongType(), True),
-            StructField("date", StringType(), True),
-            StructField("date_unixtime", StringType(), True), 
-            StructField("sender", StringType(), True),
-            StructField("from_id", LongType(), True),
-            StructField("text", StringType(), True),
-            # UPDATED: Use Array of Structs instead of Map
-            StructField("reactions", ArrayType(REACTION_SCHEMA), True) 
-        ])
-        
-    # The Output Schema for Step 5 (Thread Reconstruction)
-    GOLD_THREAD_SCHEMA = StructType([
-            StructField("thread_id", StringType(), True),
-            StructField("chat_id", LongType(), True),
-            StructField("chat_name", StringType(), True),
-            StructField("week_id", StringType(), True),
-            StructField("root_message_id", LongType(), True),
-            
-            # 1. The Transcript (For LLM / RAG)
-            StructField("transcript", StringType(), True),
-            
-            # 2. The Structured Data (For Database / Analytics)
-            StructField("messages", ArrayType(NESTED_MESSAGE_SCHEMA), True),
-            
-            # 3. Metadata
-            StructField("message_count", LongType(), True),
-            StructField("participant_count", LongType(), True),
-            StructField("start_unixtime", LongType(), True),
-            StructField("end_unixtime", LongType(), True)
-        ])
+   
     df_silver = enrich_columns(df)
     return df_silver.groupBy("chat_id").applyInPandas(
         _worker_thread_engine,
