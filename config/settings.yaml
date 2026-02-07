@@ -1,0 +1,5 @@
+input_path: "../data/raw/result.json"
+target_chats:
+  - "LE CERCLE DES ECONOMISTES AFRICAINS"
+  - "Grasslands / Cercle des Économistes Africains"
+mongo_db: "telegram_analytics"
