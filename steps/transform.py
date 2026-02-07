@@ -8,8 +8,7 @@ from datetime import datetime
 
 from zenml import step
 from src.domain.documents import TelegramChatDocument, ThreadTracker
-from src.domain.schemas import pydantic_to_spark_schema
-from src.steps.validate import validate_messages
+from .validate import validate_messages
 # --- Worker Functions (Must be static/top-level for pickling) ---
 
 
@@ -30,7 +29,7 @@ def enrich_columns(df: DataFrame) -> DataFrame:
         .withColumn("date_unixtime", F.unix_timestamp(F.col("date_timestamp")))\
         .withColumn("week_id", F.date_format(F.col("date_timestamp"), "yyyy-ww"))
         
-def _worker_thread_engine(pdf: pd.DataFrame) -> pd.DataFrame:
+def _worker_thread_engine(pdf: DataFrame) -> DataFrame:
         """
         Builds threads and returns them with correct Types for Arrow serialization.
         """

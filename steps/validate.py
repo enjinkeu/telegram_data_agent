@@ -81,6 +81,9 @@ def _worker_validate_batch(iterator: Iterator[DataFrame]) -> Iterator[DataFrame]
                     
             yield pd.DataFrame(valid_rows)
 
+
+
+
 @step
 def validate_messages(df_bronze: DataFrame) -> DataFrame:
     """

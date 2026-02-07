@@ -3,10 +3,10 @@ from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 from pyspark.sql.types import StructType, StructField, StringType, LongType, ArrayType, MapType
 from src.infrastructure.spark import get_spark_session
-from src.configs import settings
+
 
 @step
-def ingest_json_data() -> DataFrame:
+def ingest_json_data(input_path: str, target_chats: list) -> DataFrame:
     spark = get_spark_session()
     
     # Define Bronze Schema (As per your code)
@@ -31,11 +31,11 @@ def ingest_json_data() -> DataFrame:
         ])
     ])
 
-    df_raw = spark.read.schema(bronze_schema).option("multiline", "true").json(settings.INPUT_DATA_PATH)
+    df_raw = spark.read.schema(bronze_schema).option("multiline", "true").json(input_path)
     
     # Filter and Explode
     df_filtered = df_raw.select(F.explode("chats.list").alias("chat")) \
-        .filter(F.col("chat.name").isin(list(settings.TARGET_CHATS)))
+        .filter(F.col("chat.name").isin(list(target_chats)))
 
     return df_filtered.select(
         F.col("chat.id").alias("chat_id"),
