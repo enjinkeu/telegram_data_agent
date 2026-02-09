@@ -78,7 +78,7 @@ def _worker_validate_batch(iterator: Iterator[DataFrame]) -> Iterator[DataFrame]
                     # add error logging 
                     logging.error(f"Error processing message {raw_msg_id}: {e}")                    
                     continue
-                    
+            logging.info(f"Finished worker_validate_batch with {message_count} valid messages") 
             yield pd.DataFrame(valid_rows)
 
 
