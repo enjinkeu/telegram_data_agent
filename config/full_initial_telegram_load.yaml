@@ -1,0 +1,6 @@
+parameters:
+  input_path: "/mnt/c/Users/12404/Downloads/ai engineering/dev-projects/telegram_data_agent/data/raw/result.json"
+  target_chats:
+    - "LE CERCLE DES ECONOMISTES AFRICAINS"
+    - "Grasslands / Cercle des Économistes Africains"
+  

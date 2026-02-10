@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "telegram_data_agent"
+version = "0.1.0"
+description = "SQL agent using agents to query telegram data"
+authors = ["Eugenio"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.12"
+zenml = {version = "0.56.1", extras = ["server", "pyspark"]}
+pandas = "^2.1.0"
+sqlalchemy-utils = "0.38.3"
+bcrypt = "4.0.1"
+passlib = "^1.7.4"
+setuptools = "<70.0.0"
+loguru = "^0.7.2"   # <--- Added this (was missing earlier)
+pyarrow = "^23.0.0"
+pyspark = "^4.1.1"
+
+[tool.poetry.group.dev.dependencies]
+poethepoet = "^0.41.0"  # <--- Kept only this one (the newer version)
+ipykernel = "^7.2.0"
+
+[tool.poe.tasks]
+run-telegram-etl = "poetry run python -m tools.run --no-cache --run-sink-to-mongodb"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
