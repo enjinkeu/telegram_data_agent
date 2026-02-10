@@ -1,123 +1,61 @@
-from zenml import step
-from pyspark.sql import DataFrame
-import pandas as pd
-from typing import Iterator
-import logging
-from src.domain.documents import TelegramChatDocument
-from datetime import datetime
+import json
+from typing import NamedTuple, Iterator
+from pyspark.sql import DataFrame, Row
+from pyspark.sql import functions as F
 from pyspark.sql.types import (
-    StructType, StructField, StringType, LongType, ArrayType
+    StructType, StructField, StringType, LongType, IntegerType
 )
-
-# Logic extracted from your class to a standalone function for serialization
-def _worker_validate_batch(iterator: Iterator[DataFrame]) -> Iterator[DataFrame]:
-        """
-        Worker: Replicates the original 'process_telegram_chat_data' logic 
-        PRIOR to Pydantic validation.
-        """
-        #add logging
-        
-        logging.info("Starting worker_validate_batch")
-        
-        
-        message_count = 0
-        #print(f"numbers of batches: {len(list(iterator))}")
-        
-        for pdf in iterator:
-            valid_rows = []
-            for _, row in pdf.iterrows():
-                try:
-                    # 1. Capture Raw Context (chat_ctx)
-                    msg         = row['raw_msg']
-                    chat_id     = row['chat_id']
-                    chat_name   = row['chat_name']
-                    
-                    # 2. Logic: ID & Sender extraction (matches original snippet)
-                    raw_msg_id = msg.get('id')
-                    if not raw_msg_id: continue
-                    
-                    message_uid = str(f"{chat_id}_{str(int(raw_msg_id))}")
-                    sender_name = msg.get('from') if msg.get('from') else None
-                    sender_id = msg.get('from_id').replace('user','') if msg.get('from_id') else None
-                    text_msg = msg.get('text', "")
-                    
-                    # Transformation: replace('user','')
-                    safe_reply_id = int(msg.get('reply_to_message_id')) if msg.get('reply_to_message_id') else None
-                    
-                    # Exact date logic from original code
-                    raw_date = msg['date']
-                    dt_obj = datetime.fromisoformat(raw_date.replace('Z', '+00:00'))
-                    
-                    date_unixtime = str(int(dt_obj.timestamp()))
-                    week_id = f"{chat_id}_{dt_obj.strftime('%Y-%W')}"
-                    
-                    # 3. Logic: Filter condition (matches original)
-                    if sender_name and sender_id and msg.get('type') != 'service':
-                        message_count += 1
-                        # 5. Instantiate Pydantic (Strict Validation)
-                        # This ensures the 'flatten' validator handles the text field correctly
-                        doc = TelegramChatDocument(
-                            id=message_uid,
-                            message_id=int(raw_msg_id),
-                            chat_id=chat_id,
-                            chat_name=chat_name,
-                            date=raw_date,
-                            date_unixtime=date_unixtime,
-                            week_id=week_id,
-                            sender=sender_name,
-                            from_id=int(sender_id),
-                            text=text_msg,
-                            reactions=msg.get('reactions', []),
-                            reply_to_message_id=safe_reply_id
-                        )
-                        
-                        # Add to batch
-                        valid_rows.append(doc.dict())
-                       
-              
-                except Exception as e:
-                    # Skip invalid messages silently like original code
-                    # add error logging 
-                    logging.error(f"Error processing message {raw_msg_id}: {e}")                    
-                    continue
-            logging.info(f"Finished worker_validate_batch with {message_count} valid messages") 
-            yield pd.DataFrame(valid_rows)
+from zenml import step, get_step_context
+from zenml.integrations.spark.materializers.spark_dataframe_materializer import SparkDataFrameMaterializer
 
 
 
-
-
-@step
-def validate_messages(df_bronze: DataFrame) -> DataFrame:
+@step(output_materializers=[SparkDataFrameMaterializer])
+def flatten_telegram_data(bronze_df: DataFrame) -> DataFrame:
     """
-    Applies the validation worker to the bronze DataFrame.
+    Flattens the Bronze DataFrame into a clean Silver table schema.
+    Skipping Pydantic validation to avoid serialization overhead/errors.
     """
-    # --- FIX: Define the schema manually to exclude 'model_config' ---
-    validated_schema = StructType([
-        StructField("id", StringType(), False),
-        StructField("message_id", LongType(), False),
-        StructField("chat_id", LongType(), False),
-        StructField("chat_name", StringType(), False),
-        StructField("date", StringType(), False),
-        StructField("date_unixtime", StringType(), False),
-        StructField("week_id", StringType(), False),
-        StructField("sender", StringType(), False),
-        StructField("from_id", LongType(), False),
-        StructField("text", StringType(), True),
-        StructField("reply_to_message_id", LongType(), True),
-        # Nested Array without 'model_config'
-        StructField("reactions", ArrayType(
-            StructType([
-                StructField("emoji", StringType(), True),
-                StructField("count", LongType(), True)
-            ])
-        ), True)
-    ])
-    df_validated = df_bronze.mapInPandas(
-        _worker_validate_batch,
-        schema=validated_schema
-    )
+    step_context = get_step_context()
     
-    # FIX: Cache in memory to prevent re-running this expensive step 3 times
-    df_validated.cache()
-    return df_validated
+    # 1. Native Spark Flattening
+    # This executes entirely within the JVM, avoiding Python pickling issues
+    df_silver = bronze_df.select(
+        # Identity
+        F.concat_ws("_", F.col("chat_id"), F.col("raw_msg.id")).alias("id"),
+        F.col("raw_msg.id").cast(LongType()).alias("message_id"),
+        F.col("chat_id").cast(LongType()).alias("chat_id"),
+        F.col("chat_name"),
+        
+        # Time
+        F.col("raw_msg.date").alias("date"),
+        
+        # Content
+        # We handle the reserved keyword 'from' by aliasing immediately
+        F.col("raw_msg.from").alias("sender"),
+        F.col("raw_msg.from_id").alias("from_id"),
+        
+        # Data Fields
+        # We cast text to String to ensure consistent types if the input is mixed
+        F.col("raw_msg.text").cast(StringType()).alias("text"),
+        
+        # Reactions are usually complex structures; we keep them as-is or cast to JSON string
+        F.to_json(F.col("raw_msg.reactions")).alias("reactions"),
+        
+        F.col("raw_msg.reply_to_message_id").alias("reply_to_message_id")
+    )
+
+    # 2. Basic Observability
+    # Persist the dataframe to avoid re-reading for the count
+    df_silver.cache()
+    row_count = df_silver.count()
+    
+    step_context.add_output_metadata(
+        output_name="output", 
+        metadata={
+            "row_count": row_count,
+            "status": "flattened_no_validation"
+        }
+    )
+
+    return df_silver

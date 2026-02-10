@@ -8,8 +8,8 @@ class AppSettings(BaseSettings):
     # MongoDB Settings
     MONGO_USER: str = "llm_engineering"
     MONGO_PASS: str = "llm_engineering"
-    MONGO_HOST: str = "mongo"
-    MONGO_PORT: int = 27017
+    MONGO_HOST: str = "127.0.0.1"
+    MONGO_PORT: str = "27017"
     DB_NAME: str = "telegram_analytics"
     
     # Spark Settings
@@ -18,7 +18,7 @@ class AppSettings(BaseSettings):
     SPARK_MEMORY: str = "4g"
     
     # Input Data Settings
-    INPUT_PATH: str = "../data/telegram_export.json"
+    INPUT_PATH: str = "../data/result.json"
     TARGET_CHATS: Set[str] = set()  # Empty set means process all chats
 
     @property
