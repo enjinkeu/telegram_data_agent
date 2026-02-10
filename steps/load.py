@@ -2,12 +2,12 @@ from zenml import step
 from pyspark.sql import DataFrame
 
 @step
-def load_to_mongodb(df_users: DataFrame, df_threads: DataFrame, df_messages: DataFrame) -> None:
+def load_to_mongodb(df_users: DataFrame, df_threads: DataFrame, df_messages: DataFrame, db_name: str) -> None:
     # Write Users
     df_users.write \
         .format("mongodb") \
         .mode("append") \
-        .option("database", "telegram_analytics") \
+        .option("database", db_name) \
         .option("collection", "users") \
         .save()
 
@@ -15,7 +15,7 @@ def load_to_mongodb(df_users: DataFrame, df_threads: DataFrame, df_messages: Dat
     df_threads.write \
         .format("mongodb") \
         .mode("append") \
-        .option("database", "telegram_analytics") \
+        .option("database", db_name) \
         .option("collection", "threads") \
         .save()
         
@@ -23,6 +23,6 @@ def load_to_mongodb(df_users: DataFrame, df_threads: DataFrame, df_messages: Dat
     df_messages.write \
         .format("mongodb") \
         .mode("append") \
-        .option("database", "telegram_analytics") \
+        .option("database", db_name) \
         .option("collection", "messages") \
         .save()

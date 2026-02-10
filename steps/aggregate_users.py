@@ -2,7 +2,6 @@ import pandas as pd
 from typing import Iterator
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
-from pyspark.sql.types import StructType, StructField, StringType, LongType, ArrayType
 import logging
 from datetime import datetime
 

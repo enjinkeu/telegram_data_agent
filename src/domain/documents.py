@@ -8,10 +8,10 @@ import numpy as np
 from typing import Optional, List, Dict, Any, Tuple, Set, Union
 from datetime import datetime
 from collections import Counter
-from pydantic import Field, BaseModel, ValidationError, field_validator, ConfigDict
+from pydantic import Field, BaseModel, ValidationError,  ConfigDict
 from typing_extensions import Annotated
 from zenml import step, ArtifactConfig
-from langdetect import detect 
+
 
 # In test.ipynb
 import os
@@ -61,10 +61,10 @@ class TelegramChatDocument(BaseModel):
     class Settings:
         name = 'TelegramChatDocument'
         
-    @field_validator('text', mode='before')
-    @classmethod
-    def flatten(cls, v):
-        return str(v)
+    # @field_validator('text', mode='before')
+    # @classmethod
+    # def flatten(cls, v):
+    #     return str(v)
 
 
 class TelegramUserDocument(BaseModel):

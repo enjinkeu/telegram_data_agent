@@ -4,8 +4,10 @@ import pandas as pd
 from typing import Iterator
 import logging
 from src.domain.documents import TelegramChatDocument
-from src.domain.schemas import pydantic_to_spark_schema
 from datetime import datetime
+from pyspark.sql.types import (
+    StructType, StructField, StringType, LongType, ArrayType
+)
 
 # Logic extracted from your class to a standalone function for serialization
 def _worker_validate_batch(iterator: Iterator[DataFrame]) -> Iterator[DataFrame]:
@@ -70,7 +72,7 @@ def _worker_validate_batch(iterator: Iterator[DataFrame]) -> Iterator[DataFrame]
                         )
                         
                         # Add to batch
-                        valid_rows.append(doc.model_dump())
+                        valid_rows.append(doc.dict())
                        
               
                 except Exception as e:
@@ -84,13 +86,38 @@ def _worker_validate_batch(iterator: Iterator[DataFrame]) -> Iterator[DataFrame]
 
 
 
+
 @step
 def validate_messages(df_bronze: DataFrame) -> DataFrame:
     """
     Applies the validation worker to the bronze DataFrame.
     """
-    schema=pydantic_to_spark_schema(TelegramChatDocument)
-    return df_bronze.mapInPandas(
+    # --- FIX: Define the schema manually to exclude 'model_config' ---
+    validated_schema = StructType([
+        StructField("id", StringType(), False),
+        StructField("message_id", LongType(), False),
+        StructField("chat_id", LongType(), False),
+        StructField("chat_name", StringType(), False),
+        StructField("date", StringType(), False),
+        StructField("date_unixtime", StringType(), False),
+        StructField("week_id", StringType(), False),
+        StructField("sender", StringType(), False),
+        StructField("from_id", LongType(), False),
+        StructField("text", StringType(), True),
+        StructField("reply_to_message_id", LongType(), True),
+        # Nested Array without 'model_config'
+        StructField("reactions", ArrayType(
+            StructType([
+                StructField("emoji", StringType(), True),
+                StructField("count", LongType(), True)
+            ])
+        ), True)
+    ])
+    df_validated = df_bronze.mapInPandas(
         _worker_validate_batch,
-        schema=schema
+        schema=validated_schema
     )
+    
+    # FIX: Cache in memory to prevent re-running this expensive step 3 times
+    df_validated.cache()
+    return df_validated

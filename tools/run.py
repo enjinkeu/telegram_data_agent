@@ -4,7 +4,7 @@ from pathlib import Path
 import click
 from loguru import logger
 from src.configs import settings
-from pipelines import telegram_data_etl
+from pipelines.sink_to_mongodb import telegram_data_etl
 
 @click.command(
     help="""
@@ -49,10 +49,22 @@ Examples:
     default=False,
     help="Whether to run the ETL pipeline.",
 )
-def main(no_cache: bool, 
-         run_sink_to_mongodb: bool, 
-         run_etl: bool,
-         etl_config_filename: str ,
+# --- ADDED THESE MISSING OPTIONS ---
+@click.option(
+    "--etl-config-filename",
+    default="full_initial_telegram_load.yaml",
+    help="The YAML config file to use.",
+)
+@click.option(
+    "--export-settings",
+    is_flag=True,
+    default=False,
+    help="Export settings to ZenML secrets before running.",
+)
+def main(no_cache: bool = False, 
+         run_sink_to_mongodb: bool = False, 
+         run_etl: bool = False,
+         etl_config_filename: str = "full_initial_telegram_load.yaml",
          export_settings: bool = False) -> None:
     assert (run_sink_to_mongodb or run_etl),"At least one pipeline must be selected to run."
     
@@ -71,3 +83,13 @@ def main(no_cache: bool,
         assert pipeline_args["config_path"].exists(), f"Config file not found: {pipeline_args['config_path']}"
         pipeline_args["run_name"] = f"full_initial_load_sink_into_mongodb_{dt.now().strftime('%Y_%m_%d_%H_%M_%S')}"
         telegram_data_etl.with_options(**pipeline_args)(**run_args_etl)
+        
+    if run_etl:
+        run_args_etl = {}
+        pipeline_args["config_path"] = root_dir / "configs" / etl_config_filename
+        assert pipeline_args["config_path"].exists(), f"Config file not found: {pipeline_args['config_path']}"
+        pipeline_args["run_name"] = f"digital_data_etl_run_{dt.now().strftime('%Y_%m_%d_%H_%M_%S')}"
+        telegram_data_etl.with_options(**pipeline_args)(**run_args_etl)
+        
+if __name__ == "__main__":
+    main()

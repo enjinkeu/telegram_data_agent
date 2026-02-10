@@ -9,7 +9,10 @@ from zenml import step
 from src.domain.documents import TelegramChatDocument, ThreadTracker
 from src.domain.schemas import GOLD_THREAD_SCHEMA
 from .transform import enrich_columns
+from zenml.integrations.spark.materializers.spark_dataframe_materializer import SparkDataFrameMaterializer
 
+
+@step(output_materializers=[SparkDataFrameMaterializer])
 def _worker_thread_engine(pdf: DataFrame) -> DataFrame:
         """
         Builds threads and returns them with correct Types for Arrow serialization.
@@ -91,7 +94,7 @@ def _worker_thread_engine(pdf: DataFrame) -> DataFrame:
 
 
 
-@step
+@step(output_materializers=[SparkDataFrameMaterializer])
 def reconstruct_threads(df: DataFrame) -> DataFrame:
    
     df_silver = enrich_columns(df)
