@@ -16,6 +16,7 @@ setuptools = "<70.0.0"
 loguru = "^0.7.2"   # <--- Added this (was missing earlier)
 pyarrow = "^23.0.0"
 pyspark = "^4.1.1"
+pymongo = "^4.16.0"
 
 [tool.poetry.group.dev.dependencies]
 poethepoet = "^0.41.0"  # <--- Kept only this one (the newer version)
