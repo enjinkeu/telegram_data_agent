@@ -12,7 +12,24 @@ REACTION_SCHEMA = StructType([
             StructField("emoji", StringType(), True),
             StructField("count", LongType(), True)  # Now properly supports Integers
         ])
-
+BRONZE_SCHEMA = StructType([
+        StructField("chats", StructType([
+            StructField("list", ArrayType(StructType([
+                StructField("id", LongType(), True),
+                StructField("name", StringType(), True),
+                StructField("messages", ArrayType(StructType([
+                    StructField("id", LongType(), True),
+                    StructField("type", StringType(), True),
+                    StructField("date", StringType(), True),
+                    StructField("from", StringType(), True),
+                    StructField("from_id", StringType(), True), 
+                    StructField("text", StringType(), True),
+                    StructField("reply_to_message_id", LongType(), True),
+                    StructField("reactions", ArrayType(MapType(StringType(), StringType())), True)
+                ])), True)
+            ])), True)
+        ]), True)
+    ])
     # 2. Nested Message Schema uses the Reaction Schema
 NESTED_MESSAGE_SCHEMA = StructType([
             StructField("id", StringType(), True),
