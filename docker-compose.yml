@@ -1,13 +1,14 @@
 services:
+  # 1. MongoDB Atlas Local (Replaces standard mongo for Vector Search support)
   mongo:
-    image: mongo:latest
-    container_name: "llm_engineering_mongo"
+    image: mongodb/mongodb-atlas-local:latest
+    container_name: "llm_engineering_mongo_atlas"
     logging:
       options:
         max-size: 1g
     environment:
-      MONGO_INITDB_ROOT_USERNAME: "llm_engineering"
-      MONGO_INITDB_ROOT_PASSWORD: "llm_engineering"
+      - MONGODB_INITDB_ROOT_USERNAME=llm_engineering
+      - MONGODB_INITDB_ROOT_PASSWORD=llm_engineering
     ports:
       - 27017:27017
     volumes:
@@ -16,6 +17,26 @@ services:
       - local
     restart: always
 
+  # 2. Neo4j Graph Database
+  neo4j:
+    image: neo4j:5
+    container_name: "llm_engineering_neo4j"
+    ports:
+      - 7474:7474  # HTTP Browser UI (for visualizing your geopolitics graph)
+      - 7687:7687  # Bolt Protocol (for Python application connections)
+    environment:
+      # Sets the default authentication: format is username/password
+      - NEO4J_AUTH=neo4j/llm_engineering
+      # Optional but highly recommended: Enables the APOC plugin for advanced graph algorithms
+      - NEO4J_PLUGINS=["apoc"]
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks:
+      - local
+    restart: always
+
+  # 3. Qdrant (Keeping this in case you prefer dedicated vector retrieval over Mongo Atlas)
   qdrant:
     image: qdrant/qdrant:latest
     container_name: "llm_engineering_qdrant"
@@ -34,7 +55,8 @@ services:
 volumes:
   mongo_data:
   qdrant_data:
+  neo4j_data:   # New volume for graph persistence
+  neo4j_logs:   # New volume for graph logs
 
 networks:
   local:
-    driver: bridge

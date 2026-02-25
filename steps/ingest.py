@@ -54,10 +54,16 @@ def ingest_json_data(input_path: str, target_chats: list) -> DataFrame:
         F.col("chat.name").alias("chat_name"),
         F.explode("chat.messages").alias("raw_msg")
     )
-
+    # --- NEW: Filter Empty Text ---
+    # We filter out rows where text is NULL or an empty string ""
+    # Since 'text' is nested inside 'raw_msg', we reference it via dot notation.
+    df_cleaned = df_exploded.filter(
+        F.col("raw_msg.text").isNotNull() & (F.col("raw_msg.text") != "")
+    )
+    
     # 4. CRITICAL: Cache the result to prevent re-computation during counting
     # This keeps the 'observability tax' low.
-    df_cached = df_exploded.repartition(8).cache()
+    df_cached = df_cleaned.repartition(8).cache()
 
     # 5. Observability: Materialize metrics
     row_count = df_cached.count()
