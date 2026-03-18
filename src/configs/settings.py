@@ -1,4 +1,5 @@
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
+
 from typing import Set
 from zenml.client import Client
 from zenml.exceptions import EntityExistsError
@@ -12,6 +13,11 @@ class AppSettings(BaseSettings):
     MONGO_PORT: str = "27017"
     DB_NAME: str = "telegram_analytics"
     
+    # uri="bolt://localhost:7687", user="neo4j", password="llm_engineering")
+    NEON4J_URI: str = "bolt://localhost:7687"
+    NEON4J_USER: str = "neo4j"
+    NEON4J_PASS: str = "llm_engineering"
+    
     # Spark Settings
     SPARK_APP_NAME: str = "TelegramIngestionPipeline"
     SPARK_MASTER: str = "local[*]"
@@ -23,11 +29,11 @@ class AppSettings(BaseSettings):
 
     @property
     def mongo_uri(self) -> str:
-        return f"mongodb://{self.MONGO_USER}:{self.MONGO_PASS}@{self.MONGO_HOST}:{self.MONGO_PORT}/{self.DB_NAME}?authSource=admin"
+        return f"mongodb://{self.MONGO_USER}:{self.MONGO_PASS}@{self.MONGO_HOST}:{self.MONGO_PORT}/{self.DB_NAME}?authSource=admin&directConnection=true"
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    # class Config:
+    #     env_file = ".env"
+    #     env_file_encoding = "utf-8"
         # Map nested yaml structure if needed, or prefer flattening env vars
         
     def export(self) -> None:

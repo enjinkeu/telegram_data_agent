@@ -7,7 +7,7 @@ package-mode = false
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.12"
-zenml = "^0.93.2"
+zenml = {version = "0.93.2", extras = ["server"]}
 pandas = "^2.1.0"
 sqlalchemy-utils = "0.38.3"
 bcrypt = "4.0.1"
@@ -19,6 +19,11 @@ pyspark = "^4.1.1"
 pymongo = "^4.16.0"
 langchain-aws = "^1.2.5"
 langgraph = "^1.0.8"
+pydantic-settings = "^2.12.0"
+neo4j = "^6.1.0"
+opik = "^1.10.21"
+openpyxl = "^3.1.5"
+xlsxwriter = "^3.2.9"
 
 [tool.poetry.group.dev.dependencies]
 poethepoet = "^0.41.0"  # <--- Kept only this one (the newer version)

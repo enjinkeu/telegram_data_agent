@@ -4,6 +4,8 @@ from typing import List, Dict, Any, Optional, Union
 from loguru import logger
 import os
 from src.configs.settings import settings
+from langchain_aws import BedrockEmbeddings
+from pymongo.operations import SearchIndexModel
 
 
 class MongoService:
@@ -149,3 +151,122 @@ class MongoService:
 
         self.client.close()
         logger.debug("Closed MongoDB connection.")
+        
+class MongoAtlasVectorDB:
+    def __init__(self, uri=settings.mongo_uri, db_name=settings.DB_NAME, collection_name="hybrid_summaries", embedding_model_id="amazon.titan-embed-text-v2:0"):
+        """Initializes the MongoDB connection and the Amazon Titan V2 embedding model."""
+        try:
+            self.client = MongoClient(uri)
+            self.db = self.client[db_name]
+            
+            # --- THE FIX: Explicitly create the collection if it's missing ---
+            if collection_name not in self.db.list_collection_names():
+                logger.info(f"Collection '{collection_name}' not found. Creating it now...")
+                self.db.create_collection(collection_name)
+                
+                # Assign the collection
+                self.collection = self.db[collection_name]
+                
+                # Automatically build the Titan V2 Vector Index
+                self._create_vector_index()
+            else:
+                self.collection = self.db[collection_name]
+
+            # Initialize Amazon Titan V2 Embeddings
+            self.embeddings = BedrockEmbeddings(model_id=embedding_model_id)
+            
+            logger.info(f"Successfully connected to MongoDB Atlas Local: {db_name}.{collection_name}")
+        except Exception as e:
+            logger.error(f"Failed to connect to MongoDB: {e}")
+            raise
+
+    def _create_vector_index(self):
+        """Programmatically creates the Atlas Vector Search index for Titan V2 embeddings."""
+        logger.info("Building Vector Search Index for Amazon Titan V2 (1024 dimensions)...")
+        
+        search_index_model = SearchIndexModel(
+            definition={
+                "fields": [
+                    {
+                        "type": "vector",
+                        "path": "embedding",
+                        "numDimensions": 1024, # Matches Titan V2
+                        "similarity": "cosine"
+                    },
+                    {
+                        "type": "filter",
+                        "path": "l1_domain"
+                    }
+                ]
+            },
+            name="titan_vector_index",
+            type="vectorSearch"
+        )
+        
+        try:
+            self.collection.create_search_index(model=search_index_model)
+            logger.info("Vector Search Index created successfully.")
+        except Exception as e:
+            logger.error(f"Failed to create Vector Search Index: {e}")
+
+    def embed_and_store(self, thread_id: str, summary: str, l1_domain: str):
+        """Generates a Titan V2 vector and upserts the document into MongoDB."""
+        try:
+            # 1. Generate the vector using Titan V2
+            vector = self.embeddings.embed_query(summary)
+            
+            # 2. Build the Hybrid Document
+            document = {
+                "thread_id": thread_id,
+                "summary": summary,
+                "l1_domain": l1_domain,
+                "embedding": vector  # Store the 1024-dimensional float array
+            }
+            
+            # 3. Upsert into MongoDB
+            self.collection.update_one(
+                {"thread_id": thread_id}, 
+                {"$set": document}, 
+                upsert=True
+            )
+            logger.info(f"Successfully embedded and stored thread {thread_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to embed and store thread {thread_id}: {e}")
+            
+            
+    def vector_search(self, embedding: list, top_k: int = 3, l1_domain: str = None) -> list:
+        """Runs a vector search for the top K closest summaries based on a Titan embedding."""
+        
+        vector_search_stage = {
+            "$vectorSearch": {
+                "index": "titan_vector_index",
+                "queryVector": embedding,
+                "path": "embedding",
+                "numCandidates": top_k * 10,  # Best practice: 10-20x the limit
+                "limit": top_k,
+            }
+        }
+        
+        # Apply pre-filtering inside the vector search stage
+        if l1_domain:
+            vector_search_stage["$vectorSearch"]["filter"] = {"l1_domain": l1_domain}
+            
+        pipeline = [
+            vector_search_stage,
+            {
+                "$project": {
+                    "_id": 0, 
+                    "thread_id": 1, 
+                    "summary": 1, 
+                    "l1_domain": 1, 
+                    "score": {"$meta": "vectorSearchScore"}
+                }
+            }
+        ]
+        
+        try:
+            return list(self.collection.aggregate(pipeline))
+        except Exception as e:
+            logger.error(f"Vector search failed: {e}")
+            return []

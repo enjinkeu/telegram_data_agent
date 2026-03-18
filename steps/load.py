@@ -29,7 +29,7 @@ def _write_layer(df: DataFrame, db_name: str, collection: str) -> int:
         logger.info(f"[{collection}] Writing {count} records to {db_name}.{collection}...")
         df.write \
             .format("mongodb") \
-            .mode("append") \
+            .mode("overwrite") \
             .option("database", db_name) \
             .option("collection", collection) \
             .save()
