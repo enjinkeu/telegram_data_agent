@@ -2,11 +2,12 @@ from neo4j import GraphDatabase
 import logging
 import re
 from typing import List, Dict
+from src.configs.settings import settings
 
 logger = logging.getLogger(__name__)
 
 class Neo4jConnector:
-    def __init__(self, uri="bolt://localhost:7687", user="neo4j", password="llm_engineering"):
+    def __init__(self, uri=settings.NEON4J_URI, user=settings.NEON4J_USER, password=settings.NEON4J_PASS):
         """Initializes the connection to the Neo4j database."""
         try:
             self.driver = GraphDatabase.driver(uri, auth=(user, password))
@@ -33,32 +34,28 @@ class Neo4jConnector:
         return clean_str.upper()
 
     def ingest_triplets(self, thread_id: str, topic: str, triplets: List[Dict]):
-        """
-        Ingests a list of S-P-O dictionaries into the Graph Database.
-        """
-        # We use a context manager for the session to ensure it closes safely
+        """Ingests a list of S-P-O dictionaries into the Graph Database."""
         with self.driver.session() as session:
             for triplet in triplets:
                 subject = triplet.get("subject", "").strip()
                 predicate = triplet.get("predicate", "").strip()
                 object_node = triplet.get("object", "").strip()
+                context = triplet.get("context", "").strip() # Extract context
 
-                # Skip empty extractions
                 if not subject or not predicate or not object_node:
                     continue
 
                 rel_type = self._sanitize_predicate(predicate)
 
-                # The Cypher Query
-                # We tag all nodes with a generic :Entity label for easy querying later
                 query = f"""
                 MERGE (s:Entity {{name: $subject}})
                 MERGE (o:Entity {{name: $object_node}})
                 MERGE (s)-[r:`{rel_type}`]->(o)
                 
-                // We store the provenance (where this claim came from) directly on the relationship edge
+                // Store provenance AND context on the relationship edge
                 SET r.thread_id = $thread_id,
-                    r.topic = $topic
+                    r.topic = $topic,
+                    r.context = $context
                 """
                 
                 try:
@@ -67,7 +64,34 @@ class Neo4jConnector:
                         subject=subject, 
                         object_node=object_node, 
                         thread_id=thread_id, 
-                        topic=topic
+                        topic=topic,
+                        context=context # Pass parameter
                     )
                 except Exception as e:
                     logger.error(f"Failed to ingest triplet ({subject} -> {rel_type} -> {object_node}): {e}")
+                    
+                    
+    def fetch_triplets_by_threads(self, thread_ids: List[str]) -> List[Dict]:
+        """Fetches all triplets and their context for a list of thread_ids."""
+        if not thread_ids:
+            return []
+            
+        query = """
+        MATCH (s:Entity)-[r]->(o:Entity)
+        WHERE r.thread_id IN $thread_ids
+        RETURN s.name AS subject, TYPE(r) AS predicate, o.name AS object, r.context AS context, r.thread_id AS thread_id
+        """
+        results = []
+        with self.driver.session() as session:
+            try:
+                for record in session.run(query, thread_ids=thread_ids):
+                    results.append({
+                        "subject": record["subject"],
+                        "predicate": record["predicate"].lower(),
+                        "object": record["object"],
+                        "context": record.get("context"),
+                        "thread_id": record.get("thread_id")
+                    })
+            except Exception as e:
+                logger.error(f"Failed to fetch triplets for threads {thread_ids}: {e}")
+        return results

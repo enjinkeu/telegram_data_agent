@@ -233,3 +233,40 @@ class MongoAtlasVectorDB:
             
         except Exception as e:
             logger.error(f"Failed to embed and store thread {thread_id}: {e}")
+            
+            
+    def vector_search(self, embedding: list, top_k: int = 3, l1_domain: str = None) -> list:
+        """Runs a vector search for the top K closest summaries based on a Titan embedding."""
+        
+        vector_search_stage = {
+            "$vectorSearch": {
+                "index": "titan_vector_index",
+                "queryVector": embedding,
+                "path": "embedding",
+                "numCandidates": top_k * 10,  # Best practice: 10-20x the limit
+                "limit": top_k,
+            }
+        }
+        
+        # Apply pre-filtering inside the vector search stage
+        if l1_domain:
+            vector_search_stage["$vectorSearch"]["filter"] = {"l1_domain": l1_domain}
+            
+        pipeline = [
+            vector_search_stage,
+            {
+                "$project": {
+                    "_id": 0, 
+                    "thread_id": 1, 
+                    "summary": 1, 
+                    "l1_domain": 1, 
+                    "score": {"$meta": "vectorSearchScore"}
+                }
+            }
+        ]
+        
+        try:
+            return list(self.collection.aggregate(pipeline))
+        except Exception as e:
+            logger.error(f"Vector search failed: {e}")
+            return []
